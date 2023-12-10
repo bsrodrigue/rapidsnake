@@ -15,10 +15,7 @@
 #define WINDOW_WIDTH GLOBAL_WINDOW_SIZE
 //------------------------------------------
 
-#define FPS 60 // Nintendo will never be able achieve this anymore
-#define RAND_SEED 0xBFA
-
-// BASE COLORS
+//-----------[COLORS CONFIGURATIONS]-----------------
 #define RED_COLOR                                                              \
   Color { 255, 0, 0, 255 }
 #define GREEN_COLOR                                                            \
@@ -26,21 +23,24 @@
 #define BLUE_COLOR                                                             \
   Color { 0, 0, 255, 255 }
 
-// GAME COLORS
 #define PRIMARY_COLOR                                                          \
   Color { 173, 204, 96, 255 }
 #define SECONDARY_COLOR                                                        \
   Color { 43, 51, 24, 255 }
+//------------------------------------------
+
+#define FPS 60 // Nintendo will never be able achieve this anymore
+#define RAND_SEED 0xBFA
 
 // GAME SCREEN
-#define CELL_COUNT 50
+#define CELL_COUNT 75
 #define CELL_SIZE WINDOW_HEIGHT / CELL_COUNT
 
 // PLAYER
-#define MAX_SNAKE_BODY_LENGTH 25
+#define MAX_SNAKE_BODY_LENGTH 10
 #define PLAYER_UPDATE_INTERVAL 0.01
-#define MAX_PLAYER_SPEED 0.01
-#define MIN_PLAYER_SPEED 0.1
+#define MAX_SPEED_DELAY 0.01
+#define MIN_SPEED_DELAY 0.1
 
 using namespace std;
 
@@ -65,7 +65,6 @@ float get_random_pos() {
 }
 
 void draw_cell(int x, int y, Color color) {
-  // TODO: Make this look better
   DrawRectangle(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE, color);
 }
 
@@ -89,16 +88,13 @@ Vector2 get_random_vec2() {
 
 float from_player_length_to_delay(int length) {
 
-  // Value ranges
   const double len_start = 1.0;
   const double len_end = 25.0;
-  const double delay_start = -1.0;
-  const double delay_end = -2.0;
+  const double delay_start = log10(MIN_SPEED_DELAY);
+  const double delay_end = log10(MAX_SPEED_DELAY);
 
-  // Linear Interpolation
-  const double delay =
-      delay_start + (((length - len_start) / (len_end - len_start)) *
-                     (delay_end - delay_start));
+  const double delay = Lerp(delay_start, delay_end,
+                            (length - len_start) / (len_end - len_start));
 
   return pow(10, delay);
 }
@@ -106,7 +102,9 @@ float from_player_length_to_delay(int length) {
 class Player {
 public:
   deque<Vector2> body = {
-      {6, 9}, {5, 9}, {4, 9}, {3, 9}, {2, 9}, {1, 9},
+      {6, 9},
+      {5, 9},
+      {4, 9},
   };
 
   Vector2 last_tail_position;
@@ -121,7 +119,8 @@ public:
   }
 
   void grow() {
-    // TODO: This is not safe
+    if (body.size() >= MAX_SNAKE_BODY_LENGTH)
+      return;
 
     body.push_back(last_tail_position);
   }
@@ -135,11 +134,6 @@ public:
 
   void draw() { draw_cell(position.x, position.y, SECONDARY_COLOR); }
 };
-
-void sync_pos(Vector2 *dest, Vector2 origin) {
-  dest->x = origin.x / CELL_COUNT;
-  dest->y = origin.y / CELL_COUNT;
-}
 
 void get_input() {
   int pressed_key = GetKeyPressed();
@@ -155,45 +149,46 @@ void get_input() {
   input_buffer.push(pressed_key);
 }
 
-void handle_movement(int latest_pressed_key) {
+void handle_movement(int key) {
   bool is_horizontal = (player_direction == LEFT || player_direction == RIGHT);
 
   if (is_horizontal) {
-    if (latest_pressed_key == (KEY_UP)) {
+    if (key == (KEY_UP)) {
       player_direction = UP;
     }
 
-    else if (latest_pressed_key == ((KEY_DOWN))) {
+    else if (key == (KEY_DOWN)) {
       player_direction = DOWN;
     }
   }
 
   else {
-    if (latest_pressed_key == ((KEY_RIGHT))) {
+    if (key == (KEY_RIGHT)) {
       player_direction = RIGHT;
     }
 
-    else if (latest_pressed_key == ((KEY_LEFT))) {
+    else if (key == (KEY_LEFT)) {
       player_direction = LEFT;
     }
   }
 }
 
-void handle_actions(Player *player, int latest_pressed_key) {
-  if (latest_pressed_key == KEY_SPACE) {
-    player->grow();
+void handle_actions(Player *player, int key) {
+  // TODO: Implement player actions
+  if (key == KEY_SPACE) {
+    // Use item, use power, shoot projectile, etc
   }
 }
 
 void dispatch_input(Player *player) {
 
-  int latest_pressed_key = input_buffer.front();
+  int key = input_buffer.front();
 
   input_buffer.pop();
 
-  handle_movement(latest_pressed_key);
+  handle_movement(key);
 
-  handle_actions(player, latest_pressed_key);
+  handle_actions(player, key);
 }
 
 void update_position(Player *player) {
