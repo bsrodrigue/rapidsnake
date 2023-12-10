@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <deque>
 #include <queue>
@@ -37,7 +38,9 @@
 
 // PLAYER
 #define MAX_SNAKE_BODY_LENGTH 25
-#define PLAYER_UPDATE_INTERVAL 0.1
+#define PLAYER_UPDATE_INTERVAL 0.01
+#define MAX_PLAYER_SPEED 0.01
+#define MIN_PLAYER_SPEED 0.1
 
 using namespace std;
 
@@ -84,6 +87,22 @@ Vector2 get_random_vec2() {
   return vec;
 }
 
+float from_player_length_to_delay(int length) {
+
+  // Value ranges
+  const double len_start = 1.0;
+  const double len_end = 25.0;
+  const double delay_start = -1.0;
+  const double delay_end = -2.0;
+
+  // Linear Interpolation
+  const double delay =
+      delay_start + (((length - len_start) / (len_end - len_start)) *
+                     (delay_end - delay_start));
+
+  return pow(10, delay);
+}
+
 class Player {
 public:
   deque<Vector2> body = {
@@ -122,9 +141,7 @@ void sync_pos(Vector2 *dest, Vector2 origin) {
   dest->y = origin.y / CELL_COUNT;
 }
 
-void update_input_buffer() {
-  // TODO: The handle input is too fast comparing to UI update
-
+void get_input() {
   int pressed_key = GetKeyPressed();
 
   if (pressed_key == 0) {
@@ -138,12 +155,8 @@ void update_input_buffer() {
   input_buffer.push(pressed_key);
 }
 
-void handle_input() {
+void handle_movement(int latest_pressed_key) {
   bool is_horizontal = (player_direction == LEFT || player_direction == RIGHT);
-
-  int latest_pressed_key = input_buffer.front();
-
-  input_buffer.pop();
 
   if (is_horizontal) {
     if (latest_pressed_key == (KEY_UP)) {
@@ -166,6 +179,23 @@ void handle_input() {
   }
 }
 
+void handle_actions(Player *player, int latest_pressed_key) {
+  if (latest_pressed_key == KEY_SPACE) {
+    player->grow();
+  }
+}
+
+void dispatch_input(Player *player) {
+
+  int latest_pressed_key = input_buffer.front();
+
+  input_buffer.pop();
+
+  handle_movement(latest_pressed_key);
+
+  handle_actions(player, latest_pressed_key);
+}
+
 void update_position(Player *player) {
   player->last_tail_position = player->body.back();
   player->body.pop_back();
@@ -175,19 +205,19 @@ void update_position(Player *player) {
   switch (player_direction) {
 
   case UP:
-    direction = Vector2{0, -1};
+    direction = {0, -1};
     break;
 
   case DOWN:
-    direction = Vector2{0, 1};
+    direction = {0, 1};
     break;
 
   case RIGHT:
-    direction = Vector2{1, 0};
+    direction = {1, 0};
     break;
 
   case LEFT:
-    direction = Vector2{-1, 0};
+    direction = {-1, 0};
     break;
   }
 
@@ -205,6 +235,11 @@ bool event_triggered(double interval) {
   }
 
   return false;
+}
+
+void update_player_speed(Player *player, float *speed) {
+  float delay = from_player_length_to_delay(player->body.size());
+  *speed = delay;
 }
 
 int main(int argc, char *argv[]) {
@@ -230,6 +265,8 @@ int main(int argc, char *argv[]) {
 
   Food pasta = Food();
 
+  float player_speed = PLAYER_UPDATE_INTERVAL;
+
   while (!WindowShouldClose()) {
     BeginDrawing();
 
@@ -237,13 +274,22 @@ int main(int argc, char *argv[]) {
 
     DrawFPS(CELL_SIZE, CELL_SIZE);
 
-    update_input_buffer();
+    get_input();
 
-    if (event_triggered(PLAYER_UPDATE_INTERVAL)) {
+    if (event_triggered(player_speed)) {
+
       if (input_buffer.size()) {
-        handle_input();
+        dispatch_input(&player);
       }
+
       update_position(&player);
+
+      if (Vector2Equals(player.body.front(), food.position)) {
+        food.position = get_random_vec2();
+        player.grow();
+      }
+
+      update_player_speed(&player, &player_speed);
     }
 
     player.draw();
