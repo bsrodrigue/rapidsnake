@@ -284,6 +284,15 @@ int main(int argc, char *argv[]) {
         player.grow();
       }
 
+      for (uint8_t i = player.body.size() - 1; i > 0; i--) {
+        Vector2 body_part = player.body.at(i);
+
+        if (Vector2Equals(body_part, player.body.front())) {
+          // Player Self Damage
+          CloseWindow();
+        }
+      }
+
       update_player_speed(&player, &player_speed);
     }
 
