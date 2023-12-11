@@ -1,6 +1,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <deque>
 #include <queue>
 #include <raylib.h>
@@ -44,9 +46,16 @@
 
 using namespace std;
 
-enum Direction { UP, DOWN, RIGHT, LEFT };
+enum Direction { DIR_UP, DIR_DOWN, DIR_RIGHT, DIR_LEFT };
 
-Direction player_direction = UP;
+namespace rapid_snake {
+enum COMMON_INPUT_MAPPING {
+  KEY_UP,
+  KEY_DOWN,
+  KEY_RIGHT,
+  KEY_LEFT,
+};
+}
 
 //-----------[SUPER POWERS]-----------------
 bool can_backtrack = false;
@@ -56,7 +65,8 @@ bool can_shoot = false;
 
 //-----------[COMMANDS AND KEYBOARD]-----------------
 const uint8_t MAX_INPUTBUFFER_SIZE = 3;
-queue<int> input_buffer;
+queue<int> global_input_buffer;
+
 //------------------------------------------
 
 float get_random_pos() {
@@ -101,6 +111,13 @@ float from_player_length_to_delay(int length) {
 
 class Player {
 public:
+  char name[256];
+  int inputs[4];
+  queue<int> input_buffer;
+  Direction player_direction = DIR_UP;
+  float player_speed = PLAYER_UPDATE_INTERVAL;
+  Color color;
+
   deque<Vector2> body = {
       {6, 9},
       {5, 9},
@@ -109,12 +126,119 @@ public:
 
   Vector2 last_tail_position;
 
+  Player(const char *name_input, Color color_input = BLUE_COLOR) {
+    strcpy(name, name_input);
+    inputs[rapid_snake::KEY_LEFT] = KEY_LEFT;
+    inputs[rapid_snake::KEY_RIGHT] = KEY_RIGHT;
+    inputs[rapid_snake::KEY_UP] = KEY_UP;
+    inputs[rapid_snake::KEY_DOWN] = KEY_DOWN;
+
+    color = color_input;
+  }
+
+  void config_inputs(int left, int right, int up, int down) {
+    inputs[rapid_snake::KEY_LEFT] = left;
+    inputs[rapid_snake::KEY_RIGHT] = right;
+    inputs[rapid_snake::KEY_UP] = up;
+    inputs[rapid_snake::KEY_DOWN] = down;
+  }
+
+  bool is_input(int pressed_key) {
+    for (int i = 0; i < 4; i++) {
+      if (inputs[i] == pressed_key)
+        return true;
+    }
+
+    return false;
+  }
+
+  void get_input(int pressed_key) {
+
+    if (pressed_key == 0) {
+      return;
+    }
+
+    while (input_buffer.size() >= MAX_INPUTBUFFER_SIZE) {
+      input_buffer.pop();
+    }
+
+    if (is_input(pressed_key)) {
+      input_buffer.push(pressed_key);
+    }
+
+    else {
+      // Handle global input buffer
+    }
+  }
+
+  void handle_movement(int key) {
+    bool is_horizontal =
+        (player_direction == DIR_LEFT || player_direction == DIR_RIGHT);
+
+    if (is_horizontal) {
+      if (key == (inputs[rapid_snake::KEY_UP])) {
+        player_direction = DIR_UP;
+      }
+
+      else if (key == (inputs[rapid_snake::KEY_DOWN])) {
+        player_direction = DIR_DOWN;
+      }
+    }
+
+    else {
+      if (key == (inputs[rapid_snake::KEY_RIGHT])) {
+        player_direction = DIR_RIGHT;
+      }
+
+      else if (key == (inputs[rapid_snake::KEY_LEFT])) {
+        player_direction = DIR_LEFT;
+      }
+    }
+  }
+
+  void update_position() {
+    last_tail_position = body.back();
+    body.pop_back();
+    Vector2 front = body.front();
+    Vector2 direction;
+
+    switch (player_direction) {
+
+    case DIR_UP:
+      direction = {0, -1};
+      break;
+
+    case DIR_DOWN:
+      direction = {0, 1};
+      break;
+
+    case DIR_RIGHT:
+      direction = {1, 0};
+      break;
+
+    case DIR_LEFT:
+      direction = {-1, 0};
+      break;
+    }
+
+    body.push_front(Vector2Add(front, direction));
+  }
+
+  void dispatch_input() {
+
+    int key = input_buffer.front();
+
+    input_buffer.pop();
+
+    handle_movement(key);
+  }
+
   void draw() {
     for (uint8_t i = 0; i < body.size(); i++) {
       int x = body[i].x;
       int y = body[i].y;
 
-      draw_cell(x, y, BLUE_COLOR);
+      draw_cell(x, y, color);
     }
   }
 
@@ -123,6 +247,11 @@ public:
       return;
 
     body.push_back(last_tail_position);
+  }
+
+  void update_speed() {
+    float delay = from_player_length_to_delay(body.size());
+    player_speed = delay;
   }
 };
 
@@ -134,90 +263,6 @@ public:
 
   void draw() { draw_cell(position.x, position.y, SECONDARY_COLOR); }
 };
-
-void get_input() {
-  int pressed_key = GetKeyPressed();
-
-  if (pressed_key == 0) {
-    return;
-  }
-
-  while (input_buffer.size() >= MAX_INPUTBUFFER_SIZE) {
-    input_buffer.pop();
-  }
-
-  input_buffer.push(pressed_key);
-}
-
-void handle_movement(int key) {
-  bool is_horizontal = (player_direction == LEFT || player_direction == RIGHT);
-
-  if (is_horizontal) {
-    if (key == (KEY_UP)) {
-      player_direction = UP;
-    }
-
-    else if (key == (KEY_DOWN)) {
-      player_direction = DOWN;
-    }
-  }
-
-  else {
-    if (key == (KEY_RIGHT)) {
-      player_direction = RIGHT;
-    }
-
-    else if (key == (KEY_LEFT)) {
-      player_direction = LEFT;
-    }
-  }
-}
-
-void handle_actions(Player *player, int key) {
-  // TODO: Implement player actions
-  if (key == KEY_SPACE) {
-    // Use item, use power, shoot projectile, etc
-  }
-}
-
-void dispatch_input(Player *player) {
-
-  int key = input_buffer.front();
-
-  input_buffer.pop();
-
-  handle_movement(key);
-
-  handle_actions(player, key);
-}
-
-void update_position(Player *player) {
-  player->last_tail_position = player->body.back();
-  player->body.pop_back();
-  Vector2 front = player->body.front();
-  Vector2 direction;
-
-  switch (player_direction) {
-
-  case UP:
-    direction = {0, -1};
-    break;
-
-  case DOWN:
-    direction = {0, 1};
-    break;
-
-  case RIGHT:
-    direction = {1, 0};
-    break;
-
-  case LEFT:
-    direction = {-1, 0};
-    break;
-  }
-
-  player->body.push_front(Vector2Add(front, direction));
-}
 
 double last_updatetime = 0;
 
@@ -232,71 +277,67 @@ bool event_triggered(double interval) {
   return false;
 }
 
-void update_player_speed(Player *player, float *speed) {
-  float delay = from_player_length_to_delay(player->body.size());
-  *speed = delay;
+void player_loop(Player *player, Food *food) {
+  if (player->input_buffer.size()) {
+    player->dispatch_input();
+  }
+
+  player->update_position();
+
+  // Check food collision
+  if (Vector2Equals(player->body.front(), food->position)) {
+    food->position = get_random_vec2();
+    player->grow();
+  }
+
+  // Check player->collision
+  for (uint8_t i = player->body.size() - 1; i > 0; i--) {
+    Vector2 body_part = player->body.at(i);
+
+    if (Vector2Equals(body_part, player->body.front())) {
+      // player->Self Damage
+      CloseWindow();
+    }
+  }
+
+  player->update_speed();
 }
 
 int main(int argc, char *argv[]) {
-
   const char *window_title = "Rapid Snake";
-
   InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, window_title);
+  SetTargetFPS(FPS);
 
   auto time = std::chrono::system_clock::now();
-
   auto duration = time.time_since_epoch();
-
   auto millis =
       std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
 
   SetRandomSeed(RAND_SEED * millis);
 
-  SetTargetFPS(FPS);
-
   Food food = Food();
+  Player player = Player("Rachid");
+  Player player2 = Player("Maimouna", RED_COLOR);
 
-  Player player = Player();
-
-  Food pasta = Food();
-
-  float player_speed = PLAYER_UPDATE_INTERVAL;
+  player2.config_inputs(KEY_A, KEY_D, KEY_W, KEY_S);
 
   while (!WindowShouldClose()) {
     BeginDrawing();
-
     ClearBackground(PRIMARY_COLOR);
-
     DrawFPS(CELL_SIZE, CELL_SIZE);
+    int pressed_key = GetKeyPressed();
 
-    get_input();
+    player.get_input(pressed_key);
+    player2.get_input(pressed_key);
 
-    if (event_triggered(player_speed)) {
-
-      if (input_buffer.size()) {
-        dispatch_input(&player);
-      }
-
-      update_position(&player);
-
-      if (Vector2Equals(player.body.front(), food.position)) {
-        food.position = get_random_vec2();
-        player.grow();
-      }
-
-      for (uint8_t i = player.body.size() - 1; i > 0; i--) {
-        Vector2 body_part = player.body.at(i);
-
-        if (Vector2Equals(body_part, player.body.front())) {
-          // Player Self Damage
-          CloseWindow();
-        }
-      }
-
-      update_player_speed(&player, &player_speed);
+    if (event_triggered(player2.player_speed)) {
+      player_loop(&player, &food);
+      player_loop(&player2, &food);
     }
 
     player.draw();
+    player2.draw();
+
     food.draw();
 
     EndDrawing();
