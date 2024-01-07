@@ -1,7 +1,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <deque>
 #include <queue>
@@ -31,11 +30,11 @@
   Color { 43, 51, 24, 255 }
 //------------------------------------------
 
-#define FPS 60 // Nintendo will never be able achieve this anymore
+#define FPS 30
 #define RAND_SEED 0xBFA
 
 // GAME SCREEN
-#define CELL_COUNT 75
+#define CELL_COUNT 40
 #define CELL_SIZE WINDOW_HEIGHT / CELL_COUNT
 
 // PLAYER
@@ -49,6 +48,7 @@ using namespace std;
 enum Direction { DIR_UP, DIR_DOWN, DIR_RIGHT, DIR_LEFT };
 
 namespace rapid_snake {
+
 enum COMMON_INPUT_MAPPING {
   KEY_UP,
   KEY_DOWN,
@@ -57,25 +57,36 @@ enum COMMON_INPUT_MAPPING {
 };
 }
 
-//-----------[SUPER POWERS]-----------------
-bool can_backtrack = false;
-bool can_selftouch = false;
-bool can_shoot = false;
-//------------------------------------------
-
 //-----------[COMMANDS AND KEYBOARD]-----------------
 const uint8_t MAX_INPUTBUFFER_SIZE = 3;
 queue<int> global_input_buffer;
-
 //------------------------------------------
 
 float get_random_pos() {
-  float pos = GetRandomValue(0, CELL_COUNT - 1);
+  float pos = GetRandomValue(1, CELL_COUNT - 2);
   return pos;
 }
 
 void draw_cell(int x, int y, Color color) {
   DrawRectangle(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE, color);
+}
+
+void draw_walls() {
+  for (int i = 0; i < CELL_COUNT; i++) {
+    draw_cell(i, 0, RED_COLOR);
+  }
+
+  for (int i = 0; i < CELL_COUNT; i++) {
+    draw_cell(CELL_COUNT - 1, i, RED_COLOR);
+  }
+
+  for (int i = CELL_COUNT - 1; i > 0; i--) {
+    draw_cell(i, CELL_COUNT - 1, RED_COLOR);
+  }
+
+  for (int i = CELL_COUNT - 1; i > 0; i--) {
+    draw_cell(0, i, RED_COLOR);
+  }
 }
 
 void draw_rand_cell(Color color) {
@@ -299,8 +310,6 @@ void player_loop(Player *player, Food *food) {
       CloseWindow();
     }
   }
-
-  player->update_speed();
 }
 
 int main(int argc, char *argv[]) {
@@ -317,9 +326,6 @@ int main(int argc, char *argv[]) {
 
   Food food = Food();
   Player player = Player("Rachid");
-  Player player2 = Player("Maimouna", RED_COLOR);
-
-  player2.config_inputs(KEY_A, KEY_D, KEY_W, KEY_S);
 
   while (!WindowShouldClose()) {
     BeginDrawing();
@@ -328,15 +334,20 @@ int main(int argc, char *argv[]) {
     int pressed_key = GetKeyPressed();
 
     player.get_input(pressed_key);
-    player2.get_input(pressed_key);
 
-    if (event_triggered(player2.player_speed)) {
+    if (event_triggered(0.1)) {
       player_loop(&player, &food);
-      player_loop(&player2, &food);
+    }
+
+    draw_walls();
+
+    // Check wall collision
+    if (player.body.front().x == 0 || player.body.front().x == CELL_COUNT - 1 ||
+        player.body.front().y == 0 || player.body.front().y == CELL_COUNT - 1) {
+      CloseWindow();
     }
 
     player.draw();
-    player2.draw();
 
     food.draw();
 
